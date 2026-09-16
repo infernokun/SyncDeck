@@ -4,10 +4,11 @@ import type {
   BackendResult,
   ConnectionStatus,
   DaemonStatus,
-  RemoteStatus,
   GameListResult,
   LibraryChange,
   PathSuggestions,
+  RemoteAddResult,
+  RemoteStatus,
   StatusMap,
 } from './types';
 
