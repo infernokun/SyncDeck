@@ -42,7 +42,7 @@ export const backend = {
   setSyncthingAutostart: (enabled: boolean) => invoke<DaemonStatus>('set_syncthing_autostart', enabled),
   suggestPaths: (appid: number) => invoke<PathSuggestions>('suggest_paths', appid),
   syncGame: (appid: number, savePath: string, source = 'manual') =>
-    invoke<{ appid: number; folderId: string; path: string; isFlatpakPath: boolean }>(
+    invoke<{ appid: number; folderId: string; path: string; isFlatpakPath: boolean; remote: RemoteAddResult }>(
       'sync_game',
       appid,
       savePath,

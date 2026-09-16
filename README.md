@@ -1,7 +1,7 @@
 # SyncDeck
 
 [![CI](https://github.com/infernokun/SyncDeck/actions/workflows/ci.yml/badge.svg)](https://github.com/infernokun/SyncDeck/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v1.1.0-blue)](https://github.com/infernokun/SyncDeck/releases/latest)
+[![Release](https://img.shields.io/badge/release-v1.2.0-blue)](https://github.com/infernokun/SyncDeck/releases/latest)
 [![Decky Loader](https://img.shields.io/badge/Decky%20Loader-plugin-1a9fff)](https://github.com/SteamDeckHomebrew/decky-loader)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-green)](LICENSE)
 
@@ -85,7 +85,19 @@ hunting for it.
 ### 3b. Let SyncDeck add folders on the PC (optional)
 
 With this set up there is nothing to accept: SyncDeck creates the folder on
-the PC itself, at the matching Windows path.
+the PC itself, in the right place, when you pick a game on the Deck.
+
+- Saves in the Proton prefix go to the same place in your Windows profile,
+  for example `~\Documents\Eidos\Tomb Raider - Underworld`. If that
+  folder already exists on the PC (the game is installed there), the two
+  sides merge.
+- Saves inside the game's install folder: SyncDeck looks for the game in
+  the PC's Steam libraries (`Program Files (x86)\Steam`, `SteamLibrary`,
+  `Steam`, `Games\Steam` on each drive) and uses the real install path.
+- Anything without a Windows equivalent (Linux-native games) goes under
+  `~\SyncDeck\<Game>` as a backup.
+
+A toast on the Deck tells you where the folder landed.
 
 1. On the PC, open Syncthing, then Actions, Settings, GUI.
 2. Set GUI Listen Address to `0.0.0.0:8384` and save. Allow it through the

@@ -8,6 +8,7 @@ directories) without Decky in the loop.
 from __future__ import annotations
 
 import os
+import re
 import time
 from typing import Any, Optional
 
@@ -22,6 +23,22 @@ _RESERVED_PORTS = {
     1337: "Decky Loader",
     8080: "commonly used by other Deck tooling",
 }
+
+# Where Steam libraries usually are on a Windows PC, relative to a drive root.
+_PC_STEAM_LIBRARY_DIRS = (
+    "Program Files (x86)\\Steam",
+    "SteamLibrary",
+    "Steam",
+    "Games\\Steam",
+    "Program Files\\Steam",
+)
+
+
+def _safe_folder_name(name: str, appid: int) -> str:
+    """A game name as a Windows folder name."""
+    cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", name)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .")
+    return cleaned or f"App {appid}"
 
 
 class SyncDeckService:
@@ -148,30 +165,82 @@ class SyncDeckService:
         self.store.set("remote", current)
         return self.remote_status()
 
-    def _add_on_remote(self, folder_id: str, label: str, save_path: str, game: steam.SteamGame) -> dict:
-        """Create the folder on the PC with the matching Windows path.
+    @staticmethod
+    def _pc_dir_exists(client: SyncthingClient, path: str) -> bool:
+        """Does a directory exist on the PC? Uses /rest/system/browse on its parent."""
+        clean = path.rstrip("\\/")
+        parent, _, name = clean.rpartition("\\")
+        if not parent or not name:
+            return False
+        entries = client.browse(parent + "\\")
+        return any(entry.rstrip("\\/").lower() == clean.lower() for entry in entries)
 
-        Skipped, with a reason, when the PC is not configured, is not
-        Windows, the path has no Windows equivalent, or the folder already
-        exists there. Never overwrites a folder the PC already has.
+    def _find_pc_install_dir(self, client: SyncthingClient, install_dir: str) -> Optional[str]:
+        """Locate a game's install dir in the PC's Steam libraries.
+
+        Steam's libraryfolders.vdf on the PC cannot be read through the
+        Syncthing API, so the usual library locations are checked on every
+        drive instead.
+        """
+        for root in client.browse(""):
+            root = root.rstrip("\\/") + "\\"
+            for library in _PC_STEAM_LIBRARY_DIRS:
+                candidate = f"{root}{library}\\steamapps\\common\\{install_dir}"
+                if self._pc_dir_exists(client, candidate):
+                    return candidate
+        return None
+
+    def _pc_target(self, client: SyncthingClient, save_path: str, game: steam.SteamGame) -> dict:
+        """Where the folder should live on the PC.
+
+        Prefix saves map exactly to the Windows profile. Saves inside the
+        install dir are looked up in the PC's Steam libraries. Anything
+        else (Linux-native saves) goes under ~\\SyncDeck\\<game> so it is
+        still created without asking. Reports whether the directory already
+        exists on the PC, since existing saves will be merged.
+        """
+        mapped = saves.pc_path(save_path, game)
+        home = client.home_dir().rstrip("\\/")
+
+        def absolute(path: str) -> str:
+            return home + path[1:] if path.startswith("~") and home else path
+
+        if mapped and mapped.get("kind") in ("profile", "drive_c"):
+            return {"pcPath": mapped["path"], "how": "mapped", "pcExisting": self._pc_dir_exists(client, absolute(mapped["path"]))}
+
+        if mapped and mapped.get("kind") == "install":
+            found = self._find_pc_install_dir(client, game.install_dir)
+            if found:
+                install = os.path.realpath(game.install_path)
+                rest = os.path.realpath(save_path)[len(install):].strip(os.sep).replace(os.sep, "\\")
+                target = f"{found}\\{rest}" if rest else found
+                return {"pcPath": target, "how": "install_found", "pcExisting": self._pc_dir_exists(client, target)}
+
+        default = "~\\SyncDeck\\" + _safe_folder_name(game.name, game.appid)
+        return {"pcPath": default, "how": "default", "pcExisting": self._pc_dir_exists(client, absolute(default))}
+
+    def _add_on_remote(self, folder_id: str, label: str, save_path: str, game: steam.SteamGame) -> dict:
+        """Create the folder on the PC so nothing has to be accepted there.
+
+        Skipped, with a reason, when the PC is not configured or is not
+        Windows. Never overwrites a folder the PC already has.
         """
         client = self.remote_client()
         if client is None:
             return {"added": False, "reason": "not_configured"}
-        mapped = saves.pc_path(save_path, game)
-        if not mapped or mapped.get("relative"):
-            return {"added": False, "reason": "no_pc_path", "pcPath": (mapped or {}).get("path")}
         try:
             if client.version().get("os") != "windows":
-                return {"added": False, "reason": "not_windows", "pcPath": mapped["path"]}
-            if client.get_folder(folder_id):
-                return {"added": True, "reason": "exists", "pcPath": mapped["path"]}
+                return {"added": False, "reason": "not_windows"}
+            existing = client.get_folder(folder_id)
+            if existing:
+                return {"added": True, "reason": "exists", "pcPath": existing.get("path"), "how": "kept"}
+            target = self._pc_target(client, save_path, game)
             device_ids = [client.my_device_id(), self.client().my_device_id()]
-            folder = build_folder(folder_id, label, mapped["path"], device_ids, int(self.store.get("versioningDays") or 0))
+            folder = build_folder(folder_id, label, target["pcPath"], device_ids, int(self.store.get("versioningDays") or 0))
             client.add_folder(folder)
-            return {"added": True, "reason": "created", "pcPath": mapped["path"]}
+            return {"added": True, "reason": "created", **target}
         except SyncDeckError as exc:
-            return {"added": False, "reason": "error", "pcPath": mapped["path"], "error": exc.as_dict()}
+            return {"added": False, "reason": "error", "error": exc.as_dict()}
 
     # -- daemon ------------------------------------------------------------
 

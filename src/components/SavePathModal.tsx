@@ -1,3 +1,4 @@
+import { toaster } from '@decky/api';
 import { ConfirmModal, DialogButton, Focusable, Spinner, TextField } from '@decky/ui';
 import { useEffect, useState } from 'react';
 
@@ -53,7 +54,19 @@ export function SavePathModal({ game, closeModal, onSynced }: Props) {
     setError(null);
     try {
       const source = customPath.trim() ? 'manual' : (suggestions?.candidates.find((c) => c.path === selected)?.kind ?? 'manual');
-      await backend.syncGame(game.appid, effectivePath, source);
+      const result = await backend.syncGame(game.appid, effectivePath, source);
+      const remote = result.remote;
+      if (remote?.added && remote.pcPath) {
+        const note =
+          remote.how === 'default'
+            ? ' (no Windows equivalent, so a SyncDeck folder)'
+            : remote.pcExisting
+              ? ' (existing saves there will merge)'
+              : '';
+        toaster.toast({ title: 'SyncDeck', body: `On the PC: ${remote.pcPath}${note}` });
+      } else if (remote?.reason === 'error') {
+        toaster.toast({ title: 'SyncDeck', body: `Could not add the folder on the PC: ${remote.error?.message ?? 'unknown error'}. Accept it there by hand.` });
+      }
       onSynced();
       closeModal?.();
     } catch (err) {

@@ -43,6 +43,18 @@ export interface RemoteStatus {
   error?: BackendError;
 }
 
+/** What happened on the PC when a folder was created on the Deck. */
+export interface RemoteAddResult {
+  added: boolean;
+  reason: 'not_configured' | 'not_windows' | 'exists' | 'created' | 'error';
+  pcPath?: string | null;
+  /** mapped: exact Windows path; install_found: located in the PC's Steam library; default: ~\SyncDeck\<game>. */
+  how?: 'mapped' | 'install_found' | 'default' | 'kept';
+  /** The directory already existed on the PC, so existing saves will merge. */
+  pcExisting?: boolean;
+  error?: BackendError;
+}
+
 export interface ConnectionStatus {
   connected: boolean;
   daemon?: DaemonStatus;

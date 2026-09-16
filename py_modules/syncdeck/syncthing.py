@@ -120,6 +120,20 @@ class SyncthingClient:
     def my_device_id(self) -> str:
         return str(self.system_status().get("myID", ""))
 
+    def home_dir(self) -> str:
+        """The daemon's home directory (what ~ expands to), from /rest/system/status."""
+        return str(self.system_status().get("tilde", ""))
+
+    def browse(self, current: str = "") -> list[str]:
+        """Directories under `current` on the daemon's machine.
+
+        Empty `current` lists filesystem roots (drive letters on Windows).
+        Returned entries are full paths ending in a separator.
+        """
+        params = {"current": current} if current else None
+        result = self._request("GET", "/rest/system/browse", params=params)
+        return [str(x) for x in result] if isinstance(result, list) else []
+
     def my_device_name(self) -> str:
         my_id = self.my_device_id()
         for device in self.get_devices():

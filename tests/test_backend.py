@@ -229,6 +229,17 @@ class _FakeClient:
     def version(self):
         return {"version": "v2.1.5", "os": getattr(self, "os_name", "windows")}
 
+    # a fake Windows filesystem for /rest/system/browse: parent -> [children]
+    tree: dict = {}
+    home = "C:\\Users\\infer"
+
+    def home_dir(self):
+        return self.home
+
+    def browse(self, current=""):
+        key = current.rstrip("\\/") if current else ""
+        return [key + "\\" + child + "\\" if key else child + "\\" for child in self.tree.get(key, [])]
+
     def my_device_name(self):
         return "PC"
 
@@ -359,14 +370,54 @@ class AdoptionTests(unittest.TestCase):
         # second sync: never overwrite what the PC already has
         self.assertEqual(self.service.sync_game(8140, prefix_saves)["remote"]["reason"], "exists")
 
-    def test_sync_skips_pc_when_path_has_no_windows_equivalent(self):
+    def test_sync_uses_default_pc_location_when_no_windows_equivalent(self):
+        """Linux-native saves still get a folder on the PC, under ~\\SyncDeck."""
         xdg = os.path.join(self.tmp.name, ".config", "SomeGame")
         os.makedirs(xdg)
         pc = _FakeClient([])
+        pc.my_device_id = lambda: "PC"
         self.service.remote_client = lambda: pc
         result = self.service.sync_game(8140, xdg)
-        self.assertEqual(result["remote"]["reason"], "no_pc_path")
-        self.assertEqual(pc.folders, {})
+        self.assertEqual(result["remote"]["how"], "default")
+        self.assertEqual(pc.folders["deck-8140"]["path"], "~\\SyncDeck\\Tomb Raider")
+        self.assertFalse(result["remote"]["pcExisting"])
+
+    def test_sync_reports_when_the_pc_already_has_the_save_folder(self):
+        prefix_saves = os.path.join(
+            steam.steam_root(), "steamapps", "compatdata", "8140", "pfx", "drive_c",
+            "users", "steamuser", "Documents", "Eidos", "Tomb Raider - Underworld",
+        )
+        os.makedirs(prefix_saves)
+        pc = _FakeClient([])
+        pc.my_device_id = lambda: "PC"
+        pc.tree = {"C:\\Users\\infer\\Documents\\Eidos": ["Tomb Raider - Underworld"]}
+        self.service.remote_client = lambda: pc
+        result = self.service.sync_game(8140, prefix_saves)
+        self.assertEqual(result["remote"]["how"], "mapped")
+        self.assertTrue(result["remote"]["pcExisting"])
+
+    def test_install_dir_saves_are_placed_in_the_pcs_steam_library(self):
+        install_saves = os.path.join(steam.steam_root(), "steamapps", "common", "TRU", "save")
+        os.makedirs(install_saves)
+        pc = _FakeClient([])
+        pc.my_device_id = lambda: "PC"
+        pc.tree = {
+            "": ["C:", "D:"],
+            "D:\\SteamLibrary\\steamapps\\common": ["TRU", "Other"],
+        }
+        self.service.remote_client = lambda: pc
+        result = self.service.sync_game(8140, install_saves)
+        self.assertEqual(result["remote"]["how"], "install_found")
+        self.assertEqual(pc.folders["deck-8140"]["path"], "D:\\SteamLibrary\\steamapps\\common\\TRU\\save")
+
+    def test_install_dir_saves_fall_back_to_default_when_game_not_on_pc(self):
+        install_saves = os.path.join(steam.steam_root(), "steamapps", "common", "TRU", "save")
+        os.makedirs(install_saves)
+        pc = _FakeClient([])
+        pc.my_device_id = lambda: "PC"
+        pc.tree = {"": ["C:"]}
+        self.service.remote_client = lambda: pc
+        self.assertEqual(self.service.sync_game(8140, install_saves)["remote"]["how"], "default")
 
     def test_sync_without_pc_configured_reports_it(self):
         os.makedirs(os.path.join(self.tmp.name, "s2"))
