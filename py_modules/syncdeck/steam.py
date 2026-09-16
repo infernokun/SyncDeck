@@ -205,10 +205,22 @@ def _iter_manifests(library: str) -> Iterator[tuple[int, str]]:
 
 
 def _prefix_activity(compat_path: str) -> float:
-    """When this prefix was last used. Proton rewrites the registry hives
-    on every launch, so their mtime tracks real use better than the dir's."""
+    """When this prefix was last used.
+
+    Proton rewrites the registry hives on every launch, so their mtime is
+    the signal. Directory mtimes only change when entries are added or
+    removed (a sync marker, a new file) and are used only when no hive
+    exists yet.
+    """
     newest = 0.0
-    for relative in ("pfx/user.reg", "pfx/system.reg", "pfx", ""):
+    for relative in ("pfx/user.reg", "pfx/system.reg"):
+        try:
+            newest = max(newest, os.stat(os.path.join(compat_path, relative)).st_mtime)
+        except OSError:
+            continue
+    if newest:
+        return newest
+    for relative in ("pfx", ""):
         try:
             newest = max(newest, os.stat(os.path.join(compat_path, relative)).st_mtime)
         except OSError:
