@@ -39,8 +39,9 @@ function statusLine(game: Game, statuses: StatusMap): { text: string; color: str
   }
   // The other device has to accept a shared folder before anything syncs.
   if (status.awaitingAccept && status.awaitingAccept.length > 0) {
+    const where = game.pcPath ? `. On the PC use ${game.pcPath}` : '';
     return {
-      text: `Waiting for ${status.awaitingAccept.join(', ')} to accept the folder in Syncthing`,
+      text: `Waiting for ${status.awaitingAccept.join(', ')} to accept the folder in Syncthing${where}`,
       color: '#e3b341',
     };
   }

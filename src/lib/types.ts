@@ -30,9 +30,23 @@ export interface DaemonStatus {
   error?: string;
 }
 
+export interface RemoteStatus {
+  configured: boolean;
+  connected?: boolean;
+  baseUrl?: string;
+  name?: string;
+  deviceId?: string;
+  os?: string;
+  version?: string;
+  /** True when SyncDeck can create folders on the PC with a mapped path (Windows only). */
+  autoAdd?: boolean;
+  error?: BackendError;
+}
+
 export interface ConnectionStatus {
   connected: boolean;
   daemon?: DaemonStatus;
+  remote?: RemoteStatus;
   endpoint?: {
     baseUrl: string;
     hasApiKey: boolean;
@@ -78,6 +92,8 @@ export interface Game {
   /** Where the saves appear to be now, when pathMissing and a candidate was found. */
   relocateTo?: SaveCandidate | null;
   library?: { path: string; contentId: string; label: string; mounted: boolean } | null;
+  /** The same folder on a Windows PC, e.g. ~\Documents\Eidos\..., when it can be mapped. */
+  pcPath?: string | null;
 }
 
 export type UnavailableReason = 'library_missing' | 'uninstalled' | 'moved' | 'game_missing';
@@ -113,6 +129,7 @@ export interface SaveCandidate {
   kind: 'prefix' | 'xdg' | 'install' | 'manual';
   confidence: number;
   entryCount: number;
+  pcPath?: string | null;
 }
 
 export interface PathSuggestions {

@@ -141,6 +141,40 @@ def _forbidden_roots() -> set[str]:
     return {os.path.realpath(r) for r in roots}
 
 
+def pc_path(path: str, game: Optional[SteamGame] = None) -> Optional[dict]:
+    """Where the same save folder lives on a Windows PC, if that is knowable.
+
+    A Proton prefix mirrors a Windows user profile, so anything under
+    users/steamuser/ maps to the user's profile on the PC (Syncthing on
+    Windows expands a leading ~ to it). Saves inside the install dir map to the
+    game's install dir in the PC's Steam library, whose location is not
+    known here; that is returned as a relative hint. Linux-native paths
+    have no Windows equivalent.
+    """
+    real = os.path.realpath(path)
+    marker = os.sep + "drive_c" + os.sep
+    index = real.find(marker)
+    if index != -1:
+        inside = real[index + len(marker):]
+        parts = inside.split(os.sep)
+        if len(parts) >= 3 and parts[0] == "users":
+            # users/<name>/<rest> -> ~\<rest>
+            rest = parts[2:]
+            return {"os": "windows", "path": "~\\" + "\\".join(rest), "kind": "profile"}
+        return {"os": "windows", "path": "C:\\" + "\\".join(parts), "kind": "drive_c"}
+    if game is not None:
+        install = os.path.realpath(game.install_path)
+        if real == install or real.startswith(install + os.sep):
+            rest = real[len(install):].strip(os.sep).split(os.sep) if real != install else []
+            return {
+                "os": "windows",
+                "path": "\\".join(["<Steam library>", "steamapps", "common", game.install_dir] + rest),
+                "kind": "install",
+                "relative": True,
+            }
+    return None
+
+
 def prefix_exists(game: SteamGame) -> bool:
     """Has this game been launched on this device at all?
 

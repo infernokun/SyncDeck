@@ -101,7 +101,77 @@ class SyncDeckService:
             "devices": devices,
             "targetDevices": self.store.get("targetDevices") or [],
             "daemon": self._daemon_status(endpoint.config_path),
+            "remote": self.remote_status(),
         }
+
+    # -- PC (remote Syncthing) ---------------------------------------------
+
+    def remote_client(self) -> Optional[SyncthingClient]:
+        """Client for the PC's Syncthing API, if the user configured it."""
+        remote = self.store.get("remote") or {}
+        base_url = (remote.get("baseUrl") or "").strip()
+        api_key = (remote.get("apiKey") or "").strip()
+        if not base_url or not api_key:
+            return None
+        if "://" not in base_url:
+            base_url = "https://" + base_url
+        return SyncthingClient(SyncthingEndpoint(base_url=base_url, api_key=api_key, source="manual"), timeout=6.0)
+
+    def remote_status(self) -> dict:
+        client = self.remote_client()
+        if client is None:
+            return {"configured": False}
+        try:
+            version = client.version()
+            return {
+                "configured": True,
+                "connected": True,
+                "baseUrl": client.endpoint.base_url,
+                "name": client.my_device_name(),
+                "deviceId": client.my_device_id(),
+                "os": version.get("os", ""),
+                "version": version.get("version", ""),
+                # Only Windows paths are mapped for now; other OSes still get
+                # the folder shared and accept it by hand.
+                "autoAdd": version.get("os") == "windows",
+            }
+        except SyncDeckError as exc:
+            return {"configured": True, "connected": False, "baseUrl": client.endpoint.base_url, "error": exc.as_dict()}
+
+    def set_remote_config(self, base_url: str, api_key: str) -> dict:
+        current = dict(self.store.get("remote") or {})
+        current["baseUrl"] = base_url.strip() or None
+        if api_key.strip():
+            current["apiKey"] = api_key.strip()
+        if not current["baseUrl"]:
+            current["apiKey"] = None
+        self.store.set("remote", current)
+        return self.remote_status()
+
+    def _add_on_remote(self, folder_id: str, label: str, save_path: str, game: steam.SteamGame) -> dict:
+        """Create the folder on the PC with the matching Windows path.
+
+        Skipped, with a reason, when the PC is not configured, is not
+        Windows, the path has no Windows equivalent, or the folder already
+        exists there. Never overwrites a folder the PC already has.
+        """
+        client = self.remote_client()
+        if client is None:
+            return {"added": False, "reason": "not_configured"}
+        mapped = saves.pc_path(save_path, game)
+        if not mapped or mapped.get("relative"):
+            return {"added": False, "reason": "no_pc_path", "pcPath": (mapped or {}).get("path")}
+        try:
+            if client.version().get("os") != "windows":
+                return {"added": False, "reason": "not_windows", "pcPath": mapped["path"]}
+            if client.get_folder(folder_id):
+                return {"added": True, "reason": "exists", "pcPath": mapped["path"]}
+            device_ids = [client.my_device_id(), self.client().my_device_id()]
+            folder = build_folder(folder_id, label, mapped["path"], device_ids, int(self.store.get("versioningDays") or 0))
+            client.add_folder(folder)
+            return {"added": True, "reason": "created", "pcPath": mapped["path"]}
+        except SyncDeckError as exc:
+            return {"added": False, "reason": "error", "pcPath": mapped["path"], "error": exc.as_dict()}
 
     # -- daemon ------------------------------------------------------------
 
@@ -386,6 +456,7 @@ class SyncDeckService:
                     "playedOnDeck": saves.prefix_exists(game),
                     "pathMissing": path_missing,
                     "relocateTo": relocate_to,
+                    "pcPath": (saves.pc_path(save_path, game) or {}).get("path") if save_path else None,
                     "library": (lambda lib: lib.as_dict() if lib else None)(
                         steam.library_for_path(save_path) if save_path else None
                     ),
@@ -448,7 +519,9 @@ class SyncDeckService:
             "hasSteamCloud": self.cloud_status([game])[appid]["hasCloud"],
             "prefixRoot": game.prefix_path,
             "installPath": game.install_path,
-            "candidates": [c.as_dict() for c in ranked],
+            "candidates": [
+                {**c.as_dict(), "pcPath": (saves.pc_path(c.path, game) or {}).get("path")} for c in ranked
+            ],
         }
 
     # -- sync --------------------------------------------------------------
@@ -492,12 +565,15 @@ class SyncDeckService:
             **self._library_fields(resolved, game),
         )
 
+        remote = self._add_on_remote(folder_id, folder["label"], resolved, game)
+
         return {
             "appid": appid,
             "folderId": folder_id,
             "path": resolved,
             "isFlatpakPath": saves.is_flatpak_path(resolved),
             "folder": result,
+            "remote": remote,
         }
 
     def relocate_game(self, appid: int) -> dict:

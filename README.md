@@ -1,7 +1,7 @@
 # SyncDeck
 
 [![CI](https://github.com/infernokun/SyncDeck/actions/workflows/ci.yml/badge.svg)](https://github.com/infernokun/SyncDeck/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v1.0.0-blue)](https://github.com/infernokun/SyncDeck/releases/latest)
+[![Release](https://img.shields.io/badge/release-v1.1.0-blue)](https://github.com/infernokun/SyncDeck/releases/latest)
 [![Decky Loader](https://img.shields.io/badge/Decky%20Loader-plugin-1a9fff)](https://github.com/SteamDeckHomebrew/decky-loader)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-green)](LICENSE)
 
@@ -78,8 +78,30 @@ Troubleshooting.
    "Waiting for <PC> to accept". For a game that is also installed on the
    PC, point it at the game's own save folder there.
 
-To skip that step in future, open your PC's Syncthing, edit the Deck device,
-and enable Auto Accept.
+While a folder is waiting, the row shows the matching Windows path
+(`~\Documents\...`), so you can type it into the PC's dialog without
+hunting for it.
+
+### 3b. Let SyncDeck add folders on the PC (optional)
+
+With this set up there is nothing to accept: SyncDeck creates the folder on
+the PC itself, at the matching Windows path.
+
+1. On the PC, open Syncthing, then Actions, Settings, GUI.
+2. Set GUI Listen Address to `0.0.0.0:8384` and save. Allow it through the
+   Windows firewall if asked.
+3. Copy the API key from the same page.
+4. On the Deck, in SyncDeck's Syncthing section, press PC Syncthing: set up
+   auto-add. Enter the PC's address (`https://<pc-ip>:8384`, or `http://`
+   if "Use HTTPS for GUI" is off) and the key.
+
+The key is stored in SyncDeck's settings file on the Deck (owner-readable
+only) and sent to the PC over your LAN. Syncthing's GUI certificate is self
+signed, so it is not verified. Paths are mapped for Windows PCs; on a Linux
+or Mac PC the folder is still shared and you accept it by hand.
+
+Alternatively, without any of this, Auto Accept on the PC (edit the Deck
+device there) adds shared folders under Syncthing's default folder path.
 
 ### 4. Day to day
 

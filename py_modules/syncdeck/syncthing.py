@@ -120,6 +120,13 @@ class SyncthingClient:
     def my_device_id(self) -> str:
         return str(self.system_status().get("myID", ""))
 
+    def my_device_name(self) -> str:
+        my_id = self.my_device_id()
+        for device in self.get_devices():
+            if device.get("deviceID") == my_id:
+                return str(device.get("name") or my_id[:7])
+        return my_id[:7]
+
     def restart_required(self) -> bool:
         result = self._request("GET", "/rest/config/restart-required")
         return bool(result.get("requiresRestart")) if isinstance(result, dict) else False

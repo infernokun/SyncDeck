@@ -1,7 +1,8 @@
-import { ButtonItem, PanelSection, PanelSectionRow, Spinner, ToggleField } from '@decky/ui';
+import { ButtonItem, PanelSection, PanelSectionRow, Spinner, ToggleField, showModal } from '@decky/ui';
 
 import { backend, errorMessage } from '../lib/backend';
 import type { ConnectionStatus } from '../lib/types';
+import { PcSetupModal } from './PcSetupModal';
 
 interface Props {
   status: ConnectionStatus | null;
@@ -104,6 +105,15 @@ export function ConnectionPanel({ status, loading, onRefresh, onError }: Props) 
 
   const remotes = (status.devices ?? []).filter((device) => !device.isLocal);
   const targets = new Set(status.targetDevices ?? []);
+  const remote = status.remote;
+
+  const pcLine = !remote?.configured
+    ? 'Not set up. New folders must be accepted on the PC by hand.'
+    : !remote.connected
+      ? `Cannot reach ${remote.baseUrl}: ${remote.error?.message ?? 'no response'}`
+      : remote.autoAdd
+        ? `${remote.name} (${remote.os}). Folders are added there at the matching Windows path.`
+        : `${remote.name} (${remote.os}). Paths are only mapped for Windows; accept folders by hand.`;
 
   const toggleTarget = async (deviceId: string, enabled: boolean) => {
     // An empty target list means "every paired device"; materialize it
@@ -146,6 +156,16 @@ export function ConnectionPanel({ status, loading, onRefresh, onError }: Props) 
         ))
       )}
       {autostartRow}
+
+      <PanelSectionRow>
+        <ButtonItem
+          layout="below"
+          description={<span style={{ fontSize: '11px', opacity: 0.8 }}>{pcLine}</span>}
+          onClick={() => showModal(<PcSetupModal current={remote} onSaved={onRefresh} />)}
+        >
+          {remote?.configured ? 'PC Syncthing: change' : 'PC Syncthing: set up auto-add'}
+        </ButtonItem>
+      </PanelSectionRow>
     </PanelSection>
   );
 }

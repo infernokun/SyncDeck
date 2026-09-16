@@ -226,6 +226,12 @@ class _FakeClient:
     def folder_status(self, folder_id):
         return {"state": "idle", "needTotalItems": 0}
 
+    def version(self):
+        return {"version": "v2.1.5", "os": getattr(self, "os_name", "windows")}
+
+    def my_device_name(self):
+        return "PC"
+
     # remote acceptance: PC has accepted only folders listed here
     accepted_on_pc: set = set()
 
@@ -334,6 +340,37 @@ class AdoptionTests(unittest.TestCase):
         self.service.forget_game(1449690)
         self.assertNotIn("gsi4n-zdnvt", self.client.deleted)
         self.assertIsNone(self.service.store.get_mapping(1449690))
+
+    def test_sync_adds_folder_on_the_pc_with_the_windows_path(self):
+        """With the PC's API configured, the folder is created there with the
+        mapped path instead of waiting to be accepted."""
+        prefix_saves = os.path.join(
+            steam.steam_root(), "steamapps", "compatdata", "8140", "pfx", "drive_c",
+            "users", "steamuser", "Documents", "Eidos", "Tomb Raider - Underworld",
+        )
+        os.makedirs(prefix_saves)
+        pc = _FakeClient([])
+        pc.my_device_id = lambda: "PC"
+        self.service.remote_client = lambda: pc
+        result = self.service.sync_game(8140, prefix_saves)
+        self.assertEqual(result["remote"]["reason"], "created")
+        self.assertEqual(pc.folders["deck-8140"]["path"], "~\\Documents\\Eidos\\Tomb Raider - Underworld")
+        self.assertEqual([d["deviceID"] for d in pc.folders["deck-8140"]["devices"]], ["PC", "LOCAL"])
+        # second sync: never overwrite what the PC already has
+        self.assertEqual(self.service.sync_game(8140, prefix_saves)["remote"]["reason"], "exists")
+
+    def test_sync_skips_pc_when_path_has_no_windows_equivalent(self):
+        xdg = os.path.join(self.tmp.name, ".config", "SomeGame")
+        os.makedirs(xdg)
+        pc = _FakeClient([])
+        self.service.remote_client = lambda: pc
+        result = self.service.sync_game(8140, xdg)
+        self.assertEqual(result["remote"]["reason"], "no_pc_path")
+        self.assertEqual(pc.folders, {})
+
+    def test_sync_without_pc_configured_reports_it(self):
+        os.makedirs(os.path.join(self.tmp.name, "s2"))
+        self.assertEqual(self.service.sync_game(8140, os.path.join(self.tmp.name, "s2"))["remote"]["reason"], "not_configured")
 
     def test_unmapped_game_gets_inline_detection_and_played_flag(self):
         result = self.service.list_games()
@@ -672,6 +709,22 @@ class SavePathTests(unittest.TestCase):
 
         game = next(g for g in steam.installed_games() if g.appid == 49520)
         self.assertIn(target, [c.path for c in saves.candidates(game)])
+
+    def test_pc_path_maps_prefix_profile_to_windows_home(self):
+        mapped = saves.pc_path("/x/compatdata/8140/pfx/drive_c/users/steamuser/Documents/Eidos/Tomb Raider - Underworld")
+        self.assertEqual(mapped["path"], "~\\Documents\\Eidos\\Tomb Raider - Underworld")
+        self.assertEqual(mapped["kind"], "profile")
+        self.assertEqual(saves.pc_path("/x/pfx/drive_c/ProgramData/Foo")["path"], "C:\\ProgramData\\Foo")
+        self.assertIsNone(saves.pc_path("/home/deck/.config/StardewValley"))
+
+    def test_pc_path_for_install_dir_saves_is_only_a_hint(self):
+        root = make_steam_root(self.tmp.name, [(620, "Portal 2", "Portal 2")])
+        game = next(g for g in steam.installed_games() if g.appid == 620)
+        target = os.path.join(root, "steamapps", "common", "Portal 2", "save")
+        os.makedirs(target)
+        mapped = saves.pc_path(target, game)
+        self.assertTrue(mapped["relative"])
+        self.assertTrue(mapped["path"].endswith("common\\Portal 2\\save"))
 
     def test_detects_flatpak_paths(self):
         self.assertTrue(saves.is_flatpak_path("/home/deck/.var/app/com.example.App/data"))

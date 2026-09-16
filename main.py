@@ -59,7 +59,7 @@ async def _run(func: Callable[..., Any], *args: Any, **kwargs: Any) -> dict:
     """Run blocking service work off the event loop and normalize the result."""
     try:
         result = await asyncio.to_thread(functools.partial(func, *args, **kwargs))
-        if func.__name__ in ("sync_game", "unsync_game", "relocate_game", "forget_game", "start_syncthing", "set_syncthing_autostart"):
+        if func.__name__ in ("sync_game", "unsync_game", "relocate_game", "forget_game", "start_syncthing", "set_syncthing_autostart", "set_remote_config"):
             decky.logger.info("SyncDeck: %s%s -> ok", func.__name__, args)
         return _ok(result)
     except Exception as exc:  # noqa: BLE001 -- every error must reach the UI
@@ -152,6 +152,9 @@ class Plugin:
             # Never hand the API key to the frontend.
             syncthing["apiKey"] = "********" if syncthing.get("apiKey") else None
             data["syncthing"] = syncthing
+            remote = dict(data.get("remote") or {})
+            remote["apiKey"] = "********" if remote.get("apiKey") else None
+            data["remote"] = remote
             data["settingsPath"] = self.service.store.path
             return data
 
@@ -170,6 +173,12 @@ class Plugin:
             return self.service.connection_status()
 
         return await _run(write)
+
+    async def set_remote_config(self, base_url: str = "", api_key: str = "") -> dict:
+        return await _run(self.service.set_remote_config, str(base_url), str(api_key))
+
+    async def get_remote_status(self) -> dict:
+        return await _run(self.service.remote_status)
 
     async def set_target_devices(self, device_ids: list) -> dict:
         return await _run(self.service.set_target_devices, [str(d) for d in device_ids])

@@ -4,6 +4,7 @@ import type {
   BackendResult,
   ConnectionStatus,
   DaemonStatus,
+  RemoteStatus,
   GameListResult,
   LibraryChange,
   PathSuggestions,
@@ -32,6 +33,8 @@ export const backend = {
   setSyncthingConfig: (mode: 'auto' | 'manual', baseUrl = '', apiKey = '') =>
     invoke<ConnectionStatus>('set_syncthing_config', mode, baseUrl, apiKey),
   setTargetDevices: (deviceIds: string[]) => invoke<string[]>('set_target_devices', deviceIds),
+  setRemoteConfig: (baseUrl: string, apiKey: string) => invoke<RemoteStatus>('set_remote_config', baseUrl, apiKey),
+  getRemoteStatus: () => invoke<RemoteStatus>('get_remote_status'),
 
   listGames: () => invoke<GameListResult>('list_games'),
   setSkipCloud: (skip: boolean) => invoke<boolean>('set_skip_cloud', skip),

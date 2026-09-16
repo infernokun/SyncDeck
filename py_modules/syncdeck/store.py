@@ -29,6 +29,9 @@ _DEFAULTS: dict[str, Any] = {
     "folderIdPrefix": "deck",
     # Start Syncthing via a user systemd unit at login (see daemon.py).
     "autostartSyncthing": False,
+    # Optional: the PC's Syncthing API, so new folders can be added there
+    # with the right Windows path instead of waiting to be accepted.
+    "remote": {"baseUrl": None, "apiKey": None},
 }
 
 
@@ -71,6 +74,10 @@ class Store:
             finally:
                 handle.close()
             os.replace(handle.name, self.path)
+            try:
+                os.chmod(self.path, 0o600)  # may hold the PC's API key
+            except OSError:
+                pass
 
     # -- generic access ----------------------------------------------------
 

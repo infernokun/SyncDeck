@@ -105,6 +105,9 @@ export function SavePathModal({ game, closeModal, onSynced }: Props) {
               {KIND_LABEL[candidate.kind]} · {candidate.entryCount} item
               {candidate.entryCount === 1 ? '' : 's'} · {shortenPath(candidate.path)}
             </div>
+            {candidate.pcPath && (
+              <div style={{ fontSize: '11px', opacity: 0.6 }}>On the PC: {candidate.pcPath}</div>
+            )}
           </DialogButton>
         ))}
       </Focusable>
