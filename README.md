@@ -1,0 +1,149 @@
+# SyncDeck
+
+[![CI](https://github.com/infernokun/SyncDeck/actions/workflows/ci.yml/badge.svg)](https://github.com/infernokun/SyncDeck/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/badge/release-v1.0.0-blue)](https://github.com/infernokun/SyncDeck/releases/latest)
+[![Decky Loader](https://img.shields.io/badge/Decky%20Loader-plugin-1a9fff)](https://github.com/SteamDeckHomebrew/decky-loader)
+[![License](https://img.shields.io/badge/license-BSD--3--Clause-green)](LICENSE)
+
+Sync Steam Deck game saves to your PC with Syncthing, from the Quick Access
+Menu. SyncDeck finds each game's save folder, registers it with the
+Syncthing daemon already running on the Deck, and shows what is syncing.
+No per-game setup in the Syncthing web UI.
+
+Built for games that do not have Steam Cloud. Games that do are hidden by
+default, since Steam already syncs them.
+
+![SyncDeck panel](assets/screenshot.png)
+
+## Features
+
+- Lists installed Steam games from the `appmanifest` files, across all
+  libraries including SD cards.
+- Finds the save folder (Proton prefix `Saved Games`, `Documents/My Games`,
+  publisher folders under `AppData`, XDG dirs, `save/` inside the install
+  dir) and shows the best match inline. You confirm before anything is
+  created.
+- Creates the Syncthing folder, shares it with your paired devices, turns on
+  trashcan versioning.
+- Per-game status: up to date, syncing, scanning, waiting for the other
+  device to accept, paused by Syncthing, errors.
+- Adopts Syncthing folders you made by hand and shows them as synced. Never
+  deletes those.
+- Starts Syncthing from Gaming Mode. Can install a user systemd unit so it
+  starts at login without a trip to Desktop Mode.
+- Knows which drive a game's saves are on. Tells you when an SD card is out,
+  offers to relocate a folder when saves moved, lets you forget games that
+  are gone.
+
+## Requirements
+
+- Steam Deck with [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader).
+- Syncthing on the Deck. The [SyncThingy](https://flathub.org/apps/com.github.zocker_160.SyncThingy)
+  Flatpak from Discover is the usual choice. A native install works too.
+- Syncthing on your PC, already paired with the Deck.
+
+## How to
+
+### 1. Install
+
+1. Download `SyncDeck.zip` from the [latest release](https://github.com/infernokun/SyncDeck/releases/latest)
+   and copy it to the Deck (Desktop Mode, or `scp` to `~/Downloads`).
+2. In Gaming Mode open the Quick Access Menu (`...` button), go to Decky,
+   then the gear icon, then Developer.
+3. Choose Install Plugin from ZIP and pick the file.
+
+SyncDeck appears in the Decky list. If it does not after a reinstall, see
+Troubleshooting.
+
+### 2. First run
+
+1. Open SyncDeck from the Decky list. The Syncthing section shows whether
+   the daemon is reachable and which devices are paired.
+2. If Syncthing is not running, press Start Syncthing.
+3. Turn on Start Syncthing automatically. This writes a user systemd unit
+   so Syncthing is up at login, in Gaming Mode too. Without this, a Flatpak
+   Syncthing only runs while you are in Desktop Mode.
+4. Under the paired devices, leave the toggles on for the machines that
+   should receive new folders.
+
+### 3. Add a game
+
+1. In the Games list, each game without a sync shows either a detected
+   save folder, "not played on this Deck yet", or "no save folder found".
+2. Press the game. The picker opens with the detected folders ranked; the
+   best one is preselected. You can type a path instead.
+3. Press Sync this folder.
+4. On your PC, Syncthing shows a notice that the Deck wants to share a
+   folder. Accept it and choose where it goes. Until then the game shows
+   "Waiting for <PC> to accept". For a game that is also installed on the
+   PC, point it at the game's own save folder there.
+
+To skip that step in future, open your PC's Syncthing, edit the Deck device,
+and enable Auto Accept.
+
+### 4. Day to day
+
+- The list shows live status for synced games while the panel is open.
+- Press a synced game to stop syncing it (confirmed first; no files are
+  deleted). Y opens the picker to change the path.
+- Turn on Show Steam Cloud games to see the hidden ones.
+- Games whose SD card is out, or that were uninstalled, move to a Not
+  available section with the reason. They can be forgotten there, or
+  relocated if the saves turned up somewhere else.
+
+## Troubleshooting
+
+- Logs: `~/homebrew/logs/SyncDeck/`. Every failed action is written there
+  with the reason.
+- SyncDeck missing from the Decky list after a reinstall: Decky's frontend
+  gave up importing it during the reload. Restart Steam, or run
+  `scripts/decky-console.mjs` from a PC to force the import and read the
+  console.
+- "Syncthing is not running" every time you come back from Desktop Mode:
+  the Flatpak's tray app started it inside the desktop session, which ends
+  when you leave. Turn on Start Syncthing automatically.
+- "Waiting for ... to accept the folder": the PC has not approved the
+  shared folder yet. Open Syncthing there.
+- "Paused by Syncthing: folder path missing": the save folder's drive is
+  out or the folder was deleted. Nothing is removed on the other side.
+- Game not detected at all: only fully installed Steam games are listed.
+  Non-Steam shortcuts are not supported yet.
+
+## Development
+
+Backend is plain Python with no third-party packages. Decky runs plugins in
+its own frozen Python, so only the stdlib modules Decky bundles exist;
+`main.py` checks the ones this plugin needs at startup.
+
+```
+python3 -m unittest discover -s tests -v   # no Steam or Syncthing needed
+./scripts/syncdeck-cli.py status           # on a Deck: drive the backend directly
+./scripts/syncdeck-cli.py games
+./scripts/syncdeck-cli.py suggest 620
+```
+
+Frontend:
+
+```
+npm install
+npm run typecheck
+npm run build        # dist/index.js
+make zip             # out/SyncDeck.zip
+```
+
+`make deploy DECK_HOST=deck@<ip>` copies the plugin over SSH if the plugins
+dir is writable by the `deck` user. It is root-owned by default, so the ZIP
+route is the safe one.
+
+| Path | Contents |
+| --- | --- |
+| `main.py` | Decky entry point |
+| `py_modules/syncdeck/` | backend: Steam library, Syncthing client, save detection, settings, daemon control |
+| `src/` | Quick Access Menu panel (React) |
+| `scripts/` | CLI for the backend, CEF console tool |
+| `tests/` | offline tests against fixture directories |
+| `docs/` | [ARCHITECTURE.md](docs/ARCHITECTURE.md), [NOTES.md](docs/NOTES.md), [ROADMAP.md](docs/ROADMAP.md) |
+
+## License
+
+BSD-3-Clause. See [LICENSE](LICENSE).
