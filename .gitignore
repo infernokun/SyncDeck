@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.log
+*.zip
+.venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+.vscode/
+!.vscode/settings.json
+out/
+build/

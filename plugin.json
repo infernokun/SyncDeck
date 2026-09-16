@@ -1,0 +1,11 @@
+{
+  "name": "SyncDeck",
+  "author": "infernokun",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": ["sync", "saves", "syncthing", "utility"],
+    "description": "A control layer for Syncthing on Steam Deck. Detects installed games, resolves their save paths, and registers them as Syncthing folders so you never touch the web GUI per-game again.",
+    "image": "https://opengraph.githubassets.com/1/infernokun/SyncDeck"
+  }
+}
