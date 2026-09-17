@@ -10,3 +10,6 @@ __pycache__/
 !.vscode/settings.json
 out/
 build/
+
+# Local notes, deliberately not published
+docs/
