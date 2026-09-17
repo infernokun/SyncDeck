@@ -26,7 +26,7 @@ export function PcSetupModal({ current, closeModal, onSaved }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [keyFile, setKeyFile] = useState<{ path: string } | null>(null);
+  const [keyFile, setKeyFile] = useState<{ path: string; name?: string } | null>(null);
 
   useEffect(() => {
     if (!current?.baseUrl) {
@@ -93,11 +93,12 @@ export function PcSetupModal({ current, closeModal, onSaved }: Props) {
       </div>
 
       <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '6px' }}>
-        Rather than typing the key: save it as <b>{KEY_FILE}</b> into a folder this Deck already syncs (or a USB
-        stick, or ~/Downloads). It arrives here on its own, and importing deletes it.
+        Rather than typing the key: save it to a file into a folder this Deck already syncs, your home folder,
+        ~/Downloads, or a USB stick. Named <b>{KEY_FILE}</b>, <b>.syncdeck-key</b> or <b>.syncthing</b>. Importing
+        reads it and deletes it.
       </div>
       <DialogButton disabled={busy} onClick={() => void importFromFile()} style={{ marginBottom: '12px' }}>
-        {keyFile ? `Import key from ${KEY_FILE}` : `Look for ${KEY_FILE}`}
+        {keyFile ? `Import key from ${keyFile.path}` : 'Look for a key file'}
       </DialogButton>
 
       {busy && <Spinner />}

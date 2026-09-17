@@ -1,7 +1,7 @@
 # SyncDeck
 
 [![CI](https://github.com/infernokun/SyncDeck/actions/workflows/ci.yml/badge.svg)](https://github.com/infernokun/SyncDeck/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v1.3.0-blue)](https://github.com/infernokun/SyncDeck/releases/latest)
+[![Release](https://img.shields.io/badge/release-v1.4.0-blue)](https://github.com/infernokun/SyncDeck/releases/latest)
 [![Decky Loader](https://img.shields.io/badge/Decky%20Loader-plugin-1a9fff)](https://github.com/SteamDeckHomebrew/decky-loader)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-green)](LICENSE)
 
@@ -109,10 +109,14 @@ A toast on the Deck tells you where the folder landed.
 
 **Getting the key across without typing it.** A 32 character key on the
 on-screen keyboard is miserable, so you do not have to. On the PC, save the
-key to a file called `syncdeck-key.txt` and put it in a folder the Deck
-already syncs. It arrives on the Deck by itself; press *Import key from
-syncdeck-key.txt* in the same dialog and it is read and the file deleted.
-A USB stick or `~/Downloads` works too.
+key to a file and put it in a folder the Deck already syncs. It arrives on
+the Deck by itself; press *Import key from ...* in the same dialog and it is
+read and the file deleted. A USB stick, your home folder or `~/Downloads`
+work too.
+
+The file can be called `syncdeck-key.txt`, `syncdeck-key`, `.syncdeck-key`,
+`.syncthing-key` or `.syncthing`. A file that does not actually contain a key
+is left alone.
 
 The file can be just the key on its own line, or include the address:
 

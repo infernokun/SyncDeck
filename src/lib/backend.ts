@@ -37,7 +37,7 @@ export const backend = {
   setRemoteConfig: (baseUrl: string, apiKey: string) => invoke<RemoteStatus>('set_remote_config', baseUrl, apiKey),
   getRemoteStatus: () => invoke<RemoteStatus>('get_remote_status'),
   detectPcUrl: () => invoke<string | null>('detect_pc_url'),
-  findPcKeyFile: () => invoke<{ path: string; directory: string } | null>('find_pc_key_file'),
+  findPcKeyFile: () => invoke<{ path: string; directory: string; name: string } | null>('find_pc_key_file'),
   importPcKey: () =>
     invoke<{ imported: boolean; fileRemoved: boolean; fromSyncedFolder: boolean; path: string; status: RemoteStatus }>(
       'import_pc_key',

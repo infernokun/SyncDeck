@@ -495,6 +495,29 @@ class KeyFileTests(unittest.TestCase):
             self.service.import_pc_key()
         self.assertIsNone((self.service.store.get("remote") or {}).get("apiKey"))
 
+    def test_accepts_the_names_people_actually_use(self):
+        """Regression: a key saved as ~/.syncthing was not found, so the
+        import button reported nothing to import."""
+        key = "abcdef0123456789abcdef0123456789"
+        for name in (".syncthing", ".syncdeck-key", "syncdeck-key", "syncdeck-key.txt"):
+            path = os.path.join(self.tmp.name, name)
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(f"https://10.0.0.218:8384\n{key}\n")
+            found = self.service.find_pc_key_file()
+            self.assertIsNotNone(found, name)
+            self.assertEqual(found["path"], path)
+            os.remove(path)
+
+    def test_a_file_with_a_matching_name_but_no_key_is_left_alone(self):
+        """.syncthing could be someone else's config; only import a real key."""
+        decoy = os.path.join(self.tmp.name, ".syncthing")
+        with open(decoy, "w", encoding="utf-8") as handle:
+            handle.write("some unrelated config\n")
+        self.assertIsNone(self.service.find_pc_key_file())
+        with self.assertRaises(SyncDeckError):
+            self.service.import_pc_key()
+        self.assertTrue(os.path.exists(decoy), "an unrelated file must not be deleted")
+
     def test_detects_the_pc_address_from_the_live_connection(self):
         self.assertEqual(self.service.detect_pc_url(), "https://10.0.0.218:8384")
 

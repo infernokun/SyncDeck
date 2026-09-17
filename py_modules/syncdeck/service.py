@@ -35,9 +35,17 @@ _PC_STEAM_LIBRARY_DIRS = (
 )
 
 
-# A file the user drops on the PC to carry the API key across without typing
-# it on the on-screen keyboard.
+# Files the user drops on the PC to carry the API key across without typing
+# it on the on-screen keyboard. Several names are accepted because there is
+# no reason to make someone rename a file they already wrote.
 KEY_FILE_NAME = "syncdeck-key.txt"
+KEY_FILE_NAMES = (
+    KEY_FILE_NAME,
+    "syncdeck-key",
+    ".syncdeck-key",
+    ".syncthing-key",
+    ".syncthing",
+)
 _KEY_FILE_MAX_BYTES = 8192
 
 # Syncthing generates 32 character keys, but a user-set one can differ. This
@@ -249,6 +257,7 @@ class SyncDeckService:
         except SyncDeckError:
             pass
         home = os.environ.get("DECKY_USER_HOME") or os.path.expanduser("~")
+        places.append(home)
         places.append(os.path.join(home, "Downloads"))
         places.append(os.path.join(home, "Desktop"))
         media = "/run/media/" + os.path.basename(home)
@@ -256,18 +265,28 @@ class SyncDeckService:
             places.extend(os.path.join(media, name) for name in sorted(os.listdir(media)))
         except OSError:
             pass
-        return [p for p in places if p]
+        seen: set[str] = set()
+        return [p for p in places if p and not (p in seen or seen.add(p))]
 
     def find_pc_key_file(self) -> Optional[dict]:
-        """Locate a dropped key file without consuming it."""
+        """Locate a dropped key file without consuming it.
+
+        Only files that actually contain a key are returned, so a name like
+        `.syncthing` that happens to be something else is passed over
+        rather than imported and deleted.
+        """
         for directory in self._key_file_locations():
-            for name in (KEY_FILE_NAME, KEY_FILE_NAME.upper()):
+            for name in KEY_FILE_NAMES:
                 path = os.path.join(directory, name)
                 try:
-                    if os.path.isfile(path) and os.path.getsize(path) <= _KEY_FILE_MAX_BYTES:
-                        return {"path": path, "directory": directory}
+                    if not os.path.isfile(path) or os.path.getsize(path) > _KEY_FILE_MAX_BYTES:
+                        continue
+                    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+                        _, api_key = _parse_key_file(handle.read(_KEY_FILE_MAX_BYTES))
                 except OSError:
                     continue
+                if api_key:
+                    return {"path": path, "directory": directory, "name": name}
         return None
 
     def import_pc_key(self) -> dict:
@@ -279,9 +298,11 @@ class SyncDeckService:
         """
         found = self.find_pc_key_file()
         if not found:
+            home = os.environ.get("DECKY_USER_HOME") or os.path.expanduser("~")
             raise SyncDeckError(
-                f"No {KEY_FILE_NAME} found. Put it in a folder this Deck already syncs, "
-                "in ~/Downloads, or on a USB stick, then try again."
+                "No key file found. Save the key as one of "
+                + ", ".join(KEY_FILE_NAMES)
+                + f" in a folder this Deck syncs, in {home}, {home}/Downloads, or on a USB stick."
             )
 
         try:
