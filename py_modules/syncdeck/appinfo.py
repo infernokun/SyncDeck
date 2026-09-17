@@ -18,6 +18,9 @@ from typing import Any, Optional
 
 MAGIC_V29 = 0x07564429
 
+# Real appinfo entries nest a handful of levels; this is only a corruption guard.
+_MAX_DEPTH = 64
+
 _T_NESTED, _T_STRING, _T_INT32, _T_FLOAT, _T_PTR, _T_WSTRING, _T_COLOR, _T_UINT64, _T_END = range(9)
 
 
@@ -85,8 +88,13 @@ def _read_string_table(data: bytes, offset: int) -> list[str]:
     return strings
 
 
-def _parse_kv(data: bytes, pos: int, strings: list[str]) -> tuple[dict[str, Any], int]:
+def _parse_kv(data: bytes, pos: int, strings: list[str], depth: int = 0) -> tuple[dict[str, Any], int]:
     """Parse one binary-KV block; keys are string-table indices in v29."""
+    # A corrupt file could otherwise nest until Python's recursion limit,
+    # and a RecursionError would escape the per-app guard in load() and take
+    # the whole game list with it.
+    if depth > _MAX_DEPTH:
+        raise AppInfoError("appinfo.vdf nesting is deeper than expected; treating the app as unreadable")
     result: dict[str, Any] = {}
     while True:
         kind = data[pos]
@@ -98,7 +106,7 @@ def _parse_kv(data: bytes, pos: int, strings: list[str]) -> tuple[dict[str, Any]
         key = strings[key_index] if key_index < len(strings) else f"?{key_index}"
 
         if kind == _T_NESTED:
-            result[key], pos = _parse_kv(data, pos, strings)
+            result[key], pos = _parse_kv(data, pos, strings, depth + 1)
         elif kind == _T_STRING:
             result[key], pos = _read_cstring(data, pos)
         elif kind in (_T_INT32, _T_COLOR, _T_PTR):

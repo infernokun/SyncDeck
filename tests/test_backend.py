@@ -462,6 +462,21 @@ class DaemonTests(unittest.TestCase):
         self.assertEqual(env["XDG_RUNTIME_DIR"], f"/run/user/{os.getuid()}")
         self.assertTrue(env["DBUS_SESSION_BUS_ADDRESS"].endswith(f"/run/user/{os.getuid()}/bus"))
 
+    def test_rejects_an_app_id_that_is_not_reverse_dns(self):
+        """A directory name under ~/.var/app is untrusted: it reaches a unit file."""
+        evil = "/home/deck/.var/app/com.evil\nExecStartPre=-/bin/touch x/.local/state/syncthing/config.xml"
+        self.assertIsNone(daemon.flatpak_app_id(evil))
+        self.assertIsNone(daemon.syncthing_command(evil))
+        self.assertIsNone(daemon.flatpak_app_id("/home/deck/.var/app/../../etc/config.xml"))
+
+    def test_unit_file_refuses_control_characters(self):
+        with self.assertRaises(ValueError):
+            daemon.unit_content(["/usr/bin/flatpak", "run", "com.evil\nExecStartPre=/bin/touch /tmp/pwned"])
+
+    def test_unit_quoting_escapes_quotes_and_backslashes(self):
+        line = [l for l in daemon.unit_content(['/opt/a b/sync"thing', "serve"]).splitlines() if l.startswith("ExecStart=")][0]
+        self.assertEqual(line, 'ExecStart="/opt/a b/sync\\"thing" serve')
+
     def test_native_config_path_has_no_flatpak_id(self):
         self.assertIsNone(daemon.flatpak_app_id("/home/deck/.config/syncthing/config.xml"))
         self.assertIsNone(daemon.flatpak_app_id(None))
@@ -777,6 +792,21 @@ class SavePathTests(unittest.TestCase):
         self.assertTrue(mapped["relative"])
         self.assertTrue(mapped["path"].endswith("common\\Portal 2\\save"))
 
+    def test_refuses_paths_that_hold_credentials(self):
+        """~/.ssh and Decky's own directory are never save folders. The latter
+        holds SyncDeck's settings file, which may contain the PC's API key."""
+        for name in (".ssh", ".ssh/keys", ".gnupg", "homebrew", "homebrew/settings/SyncDeck"):
+            path = os.path.join(self.tmp.name, name)
+            os.makedirs(path, exist_ok=True)
+            with self.assertRaises(SavePathError, msg=name):
+                saves.validate_path(path)
+
+    def test_still_allows_a_save_folder_inside_a_steam_library(self):
+        root = make_steam_root(self.tmp.name, [(620, "Portal 2", "Portal 2")])
+        target = os.path.join(root, "steamapps", "compatdata", "620", "pfx", "drive_c", "saves")
+        os.makedirs(target)
+        self.assertEqual(saves.validate_path(target), os.path.realpath(target))
+
     def test_detects_flatpak_paths(self):
         self.assertTrue(saves.is_flatpak_path("/home/deck/.var/app/com.example.App/data"))
         self.assertFalse(saves.is_flatpak_path("/home/deck/.local/share/game"))
@@ -792,6 +822,18 @@ class FolderBuilderTests(unittest.TestCase):
 
     def test_versioning_can_be_disabled(self):
         self.assertNotIn("versioning", build_folder("deck-1", "x", "/tmp", ["A"], 0))
+
+
+class AppInfoDepthTests(unittest.TestCase):
+    def test_deeply_nested_block_is_reported_not_crashed(self):
+        """A corrupt file must not take the whole game list down."""
+        import struct as _struct
+
+        blob = b""
+        for _ in range(_MAX_NEST := 200):
+            blob += bytes([0]) + _struct.pack("<I", 0)
+        with self.assertRaises(appinfo.AppInfoError):
+            appinfo._parse_kv(blob + bytes([8]) * _MAX_NEST, 0, ["k"])
 
 
 class RetryTests(unittest.TestCase):

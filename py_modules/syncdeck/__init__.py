@@ -11,4 +11,4 @@ is why config.xml is read with regexes. main.py checks every module this
 package needs at startup and logs any that are missing.
 """
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"

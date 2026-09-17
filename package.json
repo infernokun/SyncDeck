@@ -1,6 +1,6 @@
 {
   "name": "syncdeck",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Auto-detect Steam game save locations and register them with Syncthing, from the Steam Deck Quick Access Menu.",
   "type": "module",
   "scripts": {

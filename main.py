@@ -55,12 +55,29 @@ def _err(exc: Exception) -> dict:
     return {"ok": False, "error": {"code": "internal", "message": str(exc) or exc.__class__.__name__}}
 
 
+# Methods whose arguments are safe to write to the plugin log. Anything that
+# takes a credential must never be listed here: the log is world-readable and
+# is the first thing users attach to a bug report. Methods not listed are
+# still logged, but by name only.
+LOGGABLE_ARGS = frozenset({
+    "sync_game", "unsync_game", "relocate_game", "forget_game",
+    "start_syncthing", "set_syncthing_autostart",
+})
+
+# Methods that receive an API key or similar. Kept explicit so the test suite
+# can assert they never creep into LOGGABLE_ARGS.
+CREDENTIAL_METHODS = frozenset({"set_remote_config", "set_syncthing_config"})
+
+
 async def _run(func: Callable[..., Any], *args: Any, **kwargs: Any) -> dict:
     """Run blocking service work off the event loop and normalize the result."""
     try:
         result = await asyncio.to_thread(functools.partial(func, *args, **kwargs))
-        if func.__name__ in ("sync_game", "unsync_game", "relocate_game", "forget_game", "start_syncthing", "set_syncthing_autostart", "set_remote_config"):
-            decky.logger.info("SyncDeck: %s%s -> ok", func.__name__, args)
+        name = func.__name__
+        if name in LOGGABLE_ARGS:
+            decky.logger.info("SyncDeck: %s%s -> ok", name, args)
+        elif name in CREDENTIAL_METHODS:
+            decky.logger.info("SyncDeck: %s -> ok", name)
         return _ok(result)
     except Exception as exc:  # noqa: BLE001 -- every error must reach the UI
         return _err(exc)

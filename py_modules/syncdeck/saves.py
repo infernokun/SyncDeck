@@ -116,6 +116,12 @@ def validate_path(path: str) -> str:
     if resolved in _FORBIDDEN_SUFFIXES or resolved in _forbidden_roots():
         raise SavePathError(f"Refusing to sync {resolved} -- pick the game's save folder, not its parent.")
 
+    for tree in _forbidden_trees():
+        if resolved == tree or resolved.startswith(tree + os.sep):
+            raise SavePathError(
+                f"Refusing to sync {resolved}: it holds credentials, not game saves."
+            )
+
     if not os.access(resolved, os.R_OK | os.X_OK):
         raise SavePathError(f"No read access to {resolved}.")
 
@@ -123,10 +129,11 @@ def validate_path(path: str) -> str:
 
 
 def _forbidden_roots() -> set[str]:
-    """Directories that are never a save folder, however they were picked.
+    """Directories that are never a save folder themselves.
 
-    Syncing any of these would push a Steam library, every Proton prefix,
-    or the whole home directory to the user's PC.
+    Syncing one of these would push a Steam library, every Proton prefix or
+    the whole home directory to the PC. Their contents are fine: a save
+    folder inside compatdata is exactly what this plugin is for.
     """
     home = _user_home()
     roots = {home, os.path.join(home, ".local"), os.path.join(home, ".local", "share"), os.path.join(home, ".config"),
@@ -139,6 +146,21 @@ def _forbidden_roots() -> set[str]:
         for sub in ("steamapps", "steamapps/common", "steamapps/compatdata", "userdata"):
             roots.add(os.path.join(library.path, *sub.split("/")))
     return {os.path.realpath(r) for r in roots}
+
+
+def _forbidden_trees() -> set[str]:
+    """Directories that are off limits along with everything inside them.
+
+    These hold credentials, not saves. `homebrew` is Decky's own directory:
+    it contains SyncDeck's settings file, which may hold the PC's Syncthing
+    API key, so syncing it would copy that key to the PC.
+    """
+    home = _user_home()
+    trees = {os.path.join(home, name) for name in (".ssh", ".gnupg", ".pki", ".password-store", "homebrew")}
+    settings_dir = os.environ.get("DECKY_PLUGIN_SETTINGS_DIR")
+    if settings_dir:
+        trees.add(os.path.dirname(os.path.realpath(settings_dir)))
+    return {os.path.realpath(t) for t in trees}
 
 
 def pc_path(path: str, game: Optional[SteamGame] = None) -> Optional[dict]:

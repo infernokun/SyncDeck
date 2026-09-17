@@ -12,6 +12,7 @@ bus address are set explicitly.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import time
 from typing import Optional
@@ -68,6 +69,13 @@ def _which(name: str) -> Optional[str]:
     return None
 
 
+# Flatpak application IDs are reverse-DNS names. Anything else found under
+# ~/.var/app/ is not trusted: the value ends up in a systemd unit and on a
+# command line, so a directory with a newline in its name could otherwise
+# inject unit directives.
+_APP_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$")
+
+
 def flatpak_app_id(config_path: Optional[str]) -> Optional[str]:
     """The Flatpak app that owns a config path under ~/.var/app/<id>/..."""
     if not config_path:
@@ -76,8 +84,8 @@ def flatpak_app_id(config_path: Optional[str]) -> Optional[str]:
     index = config_path.find(marker)
     if index == -1:
         return None
-    rest = config_path[index + len(marker):]
-    return rest.split("/", 1)[0] or None
+    candidate = config_path[index + len(marker):].split("/", 1)[0]
+    return candidate if _APP_ID_RE.match(candidate) else None
 
 
 def syncthing_command(config_path: Optional[str]) -> Optional[list[str]]:
@@ -97,6 +105,11 @@ def unit_path() -> str:
 
 
 def unit_content(command: list[str]) -> str:
+    # A control character in any argument would let it break out of the
+    # ExecStart line and add its own directives. Nothing legitimate needs one.
+    for part in command:
+        if any(char in part for char in "\n\r\x00"):
+            raise ValueError("Refusing to write a unit file for a command containing control characters.")
     exec_start = " ".join(_quote(part) for part in command)
     return (
         "[Unit]\n"
@@ -118,7 +131,11 @@ def unit_content(command: list[str]) -> str:
 
 
 def _quote(part: str) -> str:
-    return f'"{part}"' if " " in part else part
+    """Quote one ExecStart argument the way systemd parses them."""
+    if not any(char in part for char in ' "\\\''):
+        return part
+    escaped = part.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
 
 
 def daemon_running() -> bool:

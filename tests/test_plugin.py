@@ -115,5 +115,48 @@ class PluginTests(unittest.TestCase):
         self.assertIsNone(self.plugin._poll_task)
 
 
+class LoggingPolicyTests(unittest.TestCase):
+    """The plugin log is world-readable and gets attached to bug reports.
+
+    Regression: set_remote_config was briefly in the list of methods whose
+    arguments are logged, which wrote the PC's Syncthing API key to disk.
+    """
+
+    def setUp(self):
+        _install_decky_stub()
+        sys.modules.pop("main", None)
+        import main
+
+        self.main = main
+
+    def test_no_credential_method_has_its_arguments_logged(self):
+        self.assertTrue(self.main.CREDENTIAL_METHODS)
+        self.assertEqual(self.main.LOGGABLE_ARGS & self.main.CREDENTIAL_METHODS, frozenset())
+
+    def test_every_method_taking_a_secret_is_declared_a_credential_method(self):
+        import inspect
+
+        for name, method in inspect.getmembers(self.main.Plugin, inspect.isfunction):
+            params = inspect.signature(method).parameters
+            if any(p in params for p in ("api_key", "apiKey", "password", "token")):
+                self.assertIn(name, self.main.CREDENTIAL_METHODS, f"{name} takes a secret")
+
+    def test_setting_the_pc_key_does_not_write_it_to_the_log(self):
+        records = []
+        self.main.decky.logger.info = lambda *args, **kwargs: records.append(" ".join(str(a) for a in args))
+
+        # Named exactly like the real method so it takes the same log path.
+        def set_remote_config(base_url, api_key):
+            return {"configured": True}
+
+        async def scenario():
+            await self.main._run(set_remote_config, "https://pc:8384", "SUPERSECRETKEY")
+
+        asyncio.run(scenario())
+        joined = " ".join(records)
+        self.assertNotIn("SUPERSECRETKEY", joined)
+        self.assertIn("set_remote_config", joined, "the call should still be logged, just without its arguments")
+
+
 if __name__ == "__main__":
     unittest.main()

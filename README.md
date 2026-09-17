@@ -1,7 +1,7 @@
 # SyncDeck
 
 [![CI](https://github.com/infernokun/SyncDeck/actions/workflows/ci.yml/badge.svg)](https://github.com/infernokun/SyncDeck/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v1.2.0-blue)](https://github.com/infernokun/SyncDeck/releases/latest)
+[![Release](https://img.shields.io/badge/release-v1.2.1-blue)](https://github.com/infernokun/SyncDeck/releases/latest)
 [![Decky Loader](https://img.shields.io/badge/Decky%20Loader-plugin-1a9fff)](https://github.com/SteamDeckHomebrew/decky-loader)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-green)](LICENSE)
 
@@ -142,6 +142,36 @@ device there) adds shared folders under Syncthing's default folder path.
   out or the folder was deleted. Nothing is removed on the other side.
 - Game not detected at all: only fully installed Steam games are listed.
   Non-Steam shortcuts are not supported yet.
+
+## Security
+
+What the plugin can and cannot do, since it handles API keys and touches
+your save files.
+
+- **No root.** `plugin.json` has no `_root` flag, so it runs as the `deck`
+  user, the same user that owns your Steam files and Syncthing's config.
+- **It never deletes save files.** Removing a game from SyncDeck deletes the
+  *folder entry* in Syncthing, not its contents. Every folder it creates has
+  30-day trashcan versioning, so files deleted by a sync are recoverable on
+  both ends.
+- **Local Syncthing API key** is read from `config.xml` (owner-readable,
+  already yours) and only ever sent to `127.0.0.1`. It is never returned to
+  the UI or written to the log.
+- **PC Syncthing API key**, if you set one up, is stored in the plugin's
+  settings file with `0600` permissions and sent to the address you entered.
+  It is masked in the UI and never logged.
+- **TLS to your PC is not verified.** Syncthing's GUI certificate is
+  self-signed, so there is nothing to verify it against. Someone able to
+  intercept traffic on your LAN could capture that API key, which would let
+  them read and change your PC's Syncthing config. This is the same exposure
+  as using Syncthing's web UI over the LAN. Only enable the PC option on a
+  network you trust, and skip it on public Wi-Fi.
+- **Folders that hold credentials are refused** as save paths (`~/.ssh`,
+  `~/.gnupg`, and Decky's own directory, which contains this plugin's
+  settings file). So are the home directory and Steam library roots.
+- **Outbound connections** go only to `127.0.0.1` and, if configured, the PC
+  address you entered. Syncthing itself handles the actual syncing and its
+  own connections.
 
 ## Development
 
