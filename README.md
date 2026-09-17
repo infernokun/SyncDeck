@@ -206,7 +206,6 @@ route is the safe one.
 | `src/` | Quick Access Menu panel (React) |
 | `scripts/` | CLI for the backend, CEF console tool |
 | `tests/` | offline tests against fixture directories |
-| `docs/` | [ARCHITECTURE.md](docs/ARCHITECTURE.md), [NOTES.md](docs/NOTES.md), [ROADMAP.md](docs/ROADMAP.md) |
 
 ## License
 

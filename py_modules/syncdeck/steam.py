@@ -322,7 +322,7 @@ def library_fingerprint() -> str:
     """A cheap value that changes when the set of installed games changes.
 
     Used by the backend's reconciliation poll so we can skip a full re-parse
-    when nothing moved. See docs/NOTES.md on install detection.
+    when nothing moved.
     """
     parts: list[str] = []
     for library in library_paths():

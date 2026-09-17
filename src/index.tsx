@@ -113,7 +113,7 @@ export default definePlugin(() => {
   addEventListener<[LibraryChange]>('syncdeck/library_changed', onLibraryChanged);
 
   // SteamClient has no "app installed" event, but a download item flipping
-  // to completed is the same signal. See docs/DECISIONS.md.
+  // to completed is the same signal.
   const downloadHook = SteamClient?.Downloads?.RegisterForDownloadItems?.(
     (_isDownloading: boolean, items: Array<{ appid: number; completed: boolean }>) => {
       if (items.some((item) => item.completed)) void backend.pollLibrary().catch(() => undefined);

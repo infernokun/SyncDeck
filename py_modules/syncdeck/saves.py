@@ -211,7 +211,7 @@ def prefix_exists(game: SteamGame) -> bool:
 
 
 def is_flatpak_path(path: str) -> bool:
-    """Flatpak-sandboxed paths; see docs/NOTES.md."""
+    """True for Flatpak-sandboxed paths (~/.var/app/...)."""
     return "/.var/app/" in os.path.realpath(path)
 
 
@@ -357,9 +357,9 @@ def candidates(game: SteamGame) -> list[SaveCandidate]:
 def resolve_manifest(game: SteamGame) -> Optional[SaveCandidate]:
     """Phase 3 hook: look the game up in a Ludusavi-style manifest.
 
-    Returns None today. Wiring this up is tracked in docs/ROADMAP.md; the
-    call site in main.py already prefers its result over the heuristics, so
-    Phase 3 is a drop-in here rather than a refactor.
+    Returns None today. The call site already prefers its result over the
+    heuristics, so adding a manifest lookup is a drop-in rather than a
+    refactor.
     """
     _ = game
     return None
