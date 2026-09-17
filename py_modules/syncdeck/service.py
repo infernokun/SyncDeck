@@ -7,6 +7,7 @@ directories) without Decky in the loop.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import time
@@ -32,6 +33,64 @@ _PC_STEAM_LIBRARY_DIRS = (
     "Games\\Steam",
     "Program Files\\Steam",
 )
+
+
+# A file the user drops on the PC to carry the API key across without typing
+# it on the on-screen keyboard.
+KEY_FILE_NAME = "syncdeck-key.txt"
+_KEY_FILE_MAX_BYTES = 8192
+
+# Syncthing generates 32 character keys, but a user-set one can differ. This
+# only has to be tight enough to pick the key out of a small text file.
+_API_KEY_RE = re.compile(r"^[A-Za-z0-9_\-]{16,128}$")
+
+
+def _parse_key_file(content: str) -> tuple[Optional[str], Optional[str]]:
+    """Pull an address and an API key out of a dropped file.
+
+    Accepts JSON, `key=value` lines, or the bare key on a line of its own,
+    so it does not matter how the user writes it.
+    """
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+
+    stripped = content.strip()
+    if stripped.startswith("{"):
+        try:
+            data = json.loads(stripped)
+        except ValueError:
+            data = {}
+        if isinstance(data, dict):
+            lowered = {str(k).lower(): v for k, v in data.items()}
+            for key in ("apikey", "api_key", "key"):
+                if isinstance(lowered.get(key), str):
+                    api_key = lowered[key].strip()
+                    break
+            for key in ("baseurl", "base_url", "url", "address"):
+                if isinstance(lowered.get(key), str):
+                    base_url = lowered[key].strip()
+                    break
+            if api_key:
+                return base_url, api_key
+
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line and not line.startswith("http"):
+            name, _, value = line.partition("=")
+            name, value = name.strip().lower(), value.strip()
+            if name in ("apikey", "api_key", "key") and _API_KEY_RE.match(value):
+                api_key = value
+            elif name in ("baseurl", "base_url", "url", "address"):
+                base_url = value
+            continue
+        if line.startswith("http://") or line.startswith("https://"):
+            base_url = line
+        elif api_key is None and _API_KEY_RE.match(line):
+            api_key = line
+
+    return base_url, api_key
 
 
 def _safe_folder_name(name: str, appid: int) -> str:
@@ -154,6 +213,112 @@ class SyncDeckService:
             }
         except SyncDeckError as exc:
             return {"configured": True, "connected": False, "baseUrl": client.endpoint.base_url, "error": exc.as_dict()}
+
+    def detect_pc_url(self) -> Optional[str]:
+        """Guess the PC's Syncthing GUI address from the live sync connection.
+
+        The local daemon is already talking to the PC on port 22000, so its
+        address is known. The GUI is conventionally on 8384. This is only a
+        default for the text box: typing an IP on the on-screen keyboard is
+        the worst part of setting this up.
+        """
+        try:
+            my_id = self.client().my_device_id()
+            connections = (self.client().connections() or {}).get("connections", {})
+        except SyncDeckError:
+            return None
+        for device_id, info in connections.items():
+            if device_id == my_id or not info.get("connected"):
+                continue
+            address = str(info.get("address") or "")
+            host = address.rsplit(":", 1)[0] if ":" in address else address
+            if host:
+                return f"https://{host}:8384"
+        return None
+
+    def _key_file_locations(self) -> list[str]:
+        """Directories to check for a dropped key file, most useful first.
+
+        Folders already syncing come first: dropping the file into one on
+        the PC is the least painful way to get a 32 character key onto a
+        Deck in Gaming Mode, since it arrives by itself.
+        """
+        places: list[str] = []
+        try:
+            places.extend(f.get("path", "") for f in self.client().get_folders())
+        except SyncDeckError:
+            pass
+        home = os.environ.get("DECKY_USER_HOME") or os.path.expanduser("~")
+        places.append(os.path.join(home, "Downloads"))
+        places.append(os.path.join(home, "Desktop"))
+        media = "/run/media/" + os.path.basename(home)
+        try:
+            places.extend(os.path.join(media, name) for name in sorted(os.listdir(media)))
+        except OSError:
+            pass
+        return [p for p in places if p]
+
+    def find_pc_key_file(self) -> Optional[dict]:
+        """Locate a dropped key file without consuming it."""
+        for directory in self._key_file_locations():
+            for name in (KEY_FILE_NAME, KEY_FILE_NAME.upper()):
+                path = os.path.join(directory, name)
+                try:
+                    if os.path.isfile(path) and os.path.getsize(path) <= _KEY_FILE_MAX_BYTES:
+                        return {"path": path, "directory": directory}
+                except OSError:
+                    continue
+        return None
+
+    def import_pc_key(self) -> dict:
+        """Read the PC's address and API key from a dropped file, then delete it.
+
+        The file is removed once imported: it holds a credential, and if it
+        arrived through a synced folder it exists on every device sharing
+        that folder until deleted.
+        """
+        found = self.find_pc_key_file()
+        if not found:
+            raise SyncDeckError(
+                f"No {KEY_FILE_NAME} found. Put it in a folder this Deck already syncs, "
+                "in ~/Downloads, or on a USB stick, then try again."
+            )
+
+        try:
+            with open(found["path"], "r", encoding="utf-8", errors="replace") as handle:
+                content = handle.read(_KEY_FILE_MAX_BYTES)
+        except OSError as exc:
+            raise SyncDeckError(f"Could not read {found['path']}: {exc}") from exc
+
+        base_url, api_key = _parse_key_file(content)
+        if not api_key:
+            raise SyncDeckError(
+                f"{found['path']} does not contain something that looks like a Syncthing API key."
+            )
+
+        status = self.set_remote_config(base_url or self.detect_pc_url() or "", api_key)
+
+        removed = True
+        try:
+            os.remove(found["path"])
+        except OSError:
+            removed = False
+
+        synced_folders = []
+        try:
+            synced_folders = [os.path.realpath(f.get("path", "")) for f in self.client().get_folders()]
+        except SyncDeckError:
+            pass
+        directory = os.path.realpath(found["directory"])
+        was_synced = any(directory == f or directory.startswith(f + os.sep) for f in synced_folders if f)
+
+        return {
+            "imported": True,
+            "fileRemoved": removed,
+            "fromSyncedFolder": was_synced,
+            "path": found["path"],
+            "status": status,
+        }
 
     def set_remote_config(self, base_url: str, api_key: str) -> dict:
         current = dict(self.store.get("remote") or {})

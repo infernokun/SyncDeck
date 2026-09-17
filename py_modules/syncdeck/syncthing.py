@@ -120,6 +120,10 @@ class SyncthingClient:
     def my_device_id(self) -> str:
         return str(self.system_status().get("myID", ""))
 
+    def connections(self) -> dict:
+        """Live peer connections, including each device's address."""
+        return self._request("GET", "/rest/system/connections") or {}
+
     def home_dir(self) -> str:
         """The daemon's home directory (what ~ expands to), from /rest/system/status."""
         return str(self.system_status().get("tilde", ""))

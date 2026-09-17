@@ -197,6 +197,15 @@ class Plugin:
     async def get_remote_status(self) -> dict:
         return await _run(self.service.remote_status)
 
+    async def detect_pc_url(self) -> dict:
+        return await _run(self.service.detect_pc_url)
+
+    async def find_pc_key_file(self) -> dict:
+        return await _run(self.service.find_pc_key_file)
+
+    async def import_pc_key(self) -> dict:
+        return await _run(self.service.import_pc_key)
+
     async def set_target_devices(self, device_ids: list) -> dict:
         return await _run(self.service.set_target_devices, [str(d) for d in device_ids])
 

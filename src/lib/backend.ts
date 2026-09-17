@@ -36,6 +36,12 @@ export const backend = {
   setTargetDevices: (deviceIds: string[]) => invoke<string[]>('set_target_devices', deviceIds),
   setRemoteConfig: (baseUrl: string, apiKey: string) => invoke<RemoteStatus>('set_remote_config', baseUrl, apiKey),
   getRemoteStatus: () => invoke<RemoteStatus>('get_remote_status'),
+  detectPcUrl: () => invoke<string | null>('detect_pc_url'),
+  findPcKeyFile: () => invoke<{ path: string; directory: string } | null>('find_pc_key_file'),
+  importPcKey: () =>
+    invoke<{ imported: boolean; fileRemoved: boolean; fromSyncedFolder: boolean; path: string; status: RemoteStatus }>(
+      'import_pc_key',
+    ),
 
   listGames: () => invoke<GameListResult>('list_games'),
   setSkipCloud: (skip: boolean) => invoke<boolean>('set_skip_cloud', skip),

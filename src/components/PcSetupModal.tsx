@@ -1,5 +1,5 @@
-import { ConfirmModal, TextField } from '@decky/ui';
-import { useState } from 'react';
+import { ConfirmModal, DialogButton, Spinner, TextField } from '@decky/ui';
+import { useEffect, useState } from 'react';
 
 import { backend, errorMessage } from '../lib/backend';
 import type { RemoteStatus } from '../lib/types';
@@ -10,15 +10,54 @@ interface Props {
   onSaved: () => void;
 }
 
+const KEY_FILE = 'syncdeck-key.txt';
+
 /**
  * Connect SyncDeck to the PC's Syncthing API so new folders are created
  * there with the matching Windows path, instead of waiting to be accepted.
+ *
+ * Typing a 32 character key on the on-screen keyboard is the worst part of
+ * this, so the address is filled in from the live sync connection and the
+ * key can be imported from a file dropped into a folder already syncing.
  */
 export function PcSetupModal({ current, closeModal, onSaved }: Props) {
   const [baseUrl, setBaseUrl] = useState(current?.baseUrl ?? '');
   const [apiKey, setApiKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [keyFile, setKeyFile] = useState<{ path: string } | null>(null);
+
+  useEffect(() => {
+    if (!current?.baseUrl) {
+      backend
+        .detectPcUrl()
+        .then((url) => url && setBaseUrl((existing) => existing || url))
+        .catch(() => undefined);
+    }
+    backend
+      .findPcKeyFile()
+      .then(setKeyFile)
+      .catch(() => undefined);
+  }, [current?.baseUrl]);
+
+  const importFromFile = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await backend.importPcKey();
+      const warning = result.fromSyncedFolder
+        ? ' Delete it on your PC too: it is in a synced folder, so it exists on both machines.'
+        : '';
+      setNote(`Imported from ${result.path} and deleted it here.${warning}`);
+      onSaved();
+      closeModal?.();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const save = async () => {
     setBusy(true);
@@ -48,13 +87,24 @@ export function PcSetupModal({ current, closeModal, onSaved }: Props) {
       onCancel={() => closeModal?.()}
     >
       <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '10px' }}>
-        On the PC, open Syncthing, go to Actions, Settings, GUI. Set the listen address to 0.0.0.0:8384 and copy the
+        On the PC, open Syncthing, then Actions, Settings, GUI. Set the listen address to 0.0.0.0:8384 and copy the
         API key. Then folders SyncDeck creates are added on the PC at the matching Windows path, and nothing needs
         accepting.
       </div>
+
+      <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '6px' }}>
+        Rather than typing the key: save it as <b>{KEY_FILE}</b> into a folder this Deck already syncs (or a USB
+        stick, or ~/Downloads). It arrives here on its own, and importing deletes it.
+      </div>
+      <DialogButton disabled={busy} onClick={() => void importFromFile()} style={{ marginBottom: '12px' }}>
+        {keyFile ? `Import key from ${KEY_FILE}` : `Look for ${KEY_FILE}`}
+      </DialogButton>
+
+      {busy && <Spinner />}
+
       <TextField
         label="PC Syncthing address"
-        description="e.g. https://10.0.0.5:8384 (use http:// if the PC's GUI has TLS off)"
+        description="Filled in from the device you are already syncing with"
         value={baseUrl}
         onChange={(event) => setBaseUrl(event.target.value)}
       />
@@ -65,6 +115,7 @@ export function PcSetupModal({ current, closeModal, onSaved }: Props) {
         value={apiKey}
         onChange={(event) => setApiKey(event.target.value)}
       />
+      {note && <div style={{ marginTop: '8px', color: '#3fb950' }}>{note}</div>}
       {error && <div style={{ marginTop: '8px', color: '#ff7b72' }}>{error}</div>}
     </ConfirmModal>
   );

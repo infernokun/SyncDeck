@@ -229,6 +229,11 @@ class _FakeClient:
     def version(self):
         return {"version": "v2.1.5", "os": getattr(self, "os_name", "windows")}
 
+    conns: dict = {}
+
+    def connections(self):
+        return {"connections": self.conns}
+
     # a fake Windows filesystem for /rest/system/browse: parent -> [children]
     tree: dict = {}
     home = "C:\\Users\\infer"
@@ -429,6 +434,69 @@ class AdoptionTests(unittest.TestCase):
         self.assertFalse(tru["synced"])
         self.assertIsNone(tru["detected"])
         self.assertTrue(tru["playedOnDeck"])
+
+
+class KeyFileTests(unittest.TestCase):
+    """Getting a 32 character key onto a Deck without the on-screen keyboard."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        os.environ["DECKY_USER_HOME"] = self.tmp.name
+        self.addCleanup(os.environ.pop, "DECKY_USER_HOME", None)
+        make_steam_root(self.tmp.name, [(8140, "Tomb Raider", "TRU")])
+        self.synced = os.path.join(self.tmp.name, "synced-saves")
+        os.makedirs(self.synced)
+        self.service = SyncDeckService(Store(os.path.join(self.tmp.name, "settings.json")))
+        self.client = _FakeClient([{"id": "deck-8140", "path": self.synced, "devices": []}])
+        self.client.conns = {"PC": {"connected": True, "address": "10.0.0.218:22000"}}
+        self.service.client = lambda refresh=False: self.client
+        self.service.remote_client = lambda: None
+
+    def write_key_file(self, directory, text):
+        path = os.path.join(directory, "syncdeck-key.txt")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        return path
+
+    def test_parses_a_bare_key_json_and_key_value_lines(self):
+        from syncdeck.service import _parse_key_file
+
+        key = "abcdef0123456789abcdef0123456789"
+        self.assertEqual(_parse_key_file(key), (None, key))
+        self.assertEqual(_parse_key_file(f"# my key\nhttps://10.0.0.5:8384\n{key}\n"), ("https://10.0.0.5:8384", key))
+        self.assertEqual(_parse_key_file(f"url=https://pc:8384\napikey={key}"), ("https://pc:8384", key))
+        self.assertEqual(_parse_key_file(f'{{"baseUrl": "https://pc:8384", "apiKey": "{key}"}}'), ("https://pc:8384", key))
+        self.assertEqual(_parse_key_file("nothing useful here")[1], None)
+
+    def test_imports_from_a_synced_folder_and_deletes_the_file(self):
+        key = "abcdef0123456789abcdef0123456789"
+        path = self.write_key_file(self.synced, key)
+        result = self.service.import_pc_key()
+        self.assertTrue(result["imported"])
+        self.assertTrue(result["fileRemoved"])
+        self.assertTrue(result["fromSyncedFolder"], "must warn the user to delete it on the PC as well")
+        self.assertFalse(os.path.exists(path), "a credential must not be left lying in a synced folder")
+        self.assertEqual((self.service.store.get("remote") or {}).get("apiKey"), key)
+
+    def test_import_falls_back_to_the_detected_address(self):
+        self.write_key_file(self.synced, "abcdef0123456789abcdef0123456789")
+        self.service.import_pc_key()
+        self.assertEqual((self.service.store.get("remote") or {}).get("baseUrl"), "https://10.0.0.218:8384")
+
+    def test_import_without_a_file_explains_where_to_put_one(self):
+        with self.assertRaises(SyncDeckError) as caught:
+            self.service.import_pc_key()
+        self.assertIn("syncdeck-key.txt", str(caught.exception))
+
+    def test_a_file_without_a_key_is_rejected_rather_than_saved(self):
+        self.write_key_file(self.synced, "please put the key here")
+        with self.assertRaises(SyncDeckError):
+            self.service.import_pc_key()
+        self.assertIsNone((self.service.store.get("remote") or {}).get("apiKey"))
+
+    def test_detects_the_pc_address_from_the_live_connection(self):
+        self.assertEqual(self.service.detect_pc_url(), "https://10.0.0.218:8384")
 
 
 class DaemonTests(unittest.TestCase):

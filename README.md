@@ -1,7 +1,7 @@
 # SyncDeck
 
 [![CI](https://github.com/infernokun/SyncDeck/actions/workflows/ci.yml/badge.svg)](https://github.com/infernokun/SyncDeck/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v1.2.1-blue)](https://github.com/infernokun/SyncDeck/releases/latest)
+[![Release](https://img.shields.io/badge/release-v1.3.0-blue)](https://github.com/infernokun/SyncDeck/releases/latest)
 [![Decky Loader](https://img.shields.io/badge/Decky%20Loader-plugin-1a9fff)](https://github.com/SteamDeckHomebrew/decky-loader)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-green)](LICENSE)
 
@@ -104,8 +104,25 @@ A toast on the Deck tells you where the folder landed.
    Windows firewall if asked.
 3. Copy the API key from the same page.
 4. On the Deck, in SyncDeck's Syncthing section, press PC Syncthing: set up
-   auto-add. Enter the PC's address (`https://<pc-ip>:8384`, or `http://`
-   if "Use HTTPS for GUI" is off) and the key.
+   auto-add. The address is filled in already, taken from the device you
+   are syncing with. Put in the key and save.
+
+**Getting the key across without typing it.** A 32 character key on the
+on-screen keyboard is miserable, so you do not have to. On the PC, save the
+key to a file called `syncdeck-key.txt` and put it in a folder the Deck
+already syncs. It arrives on the Deck by itself; press *Import key from
+syncdeck-key.txt* in the same dialog and it is read and the file deleted.
+A USB stick or `~/Downloads` works too.
+
+The file can be just the key on its own line, or include the address:
+
+```
+https://192.168.1.20:8384
+your-api-key-here
+```
+
+Because a synced file exists on both machines, delete it on the PC too once
+it has been imported.
 
 The key is stored in SyncDeck's settings file on the Deck (owner-readable
 only) and sent to the PC over your LAN. Syncthing's GUI certificate is self
