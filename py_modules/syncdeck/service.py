@@ -35,12 +35,8 @@ _PC_STEAM_LIBRARY_DIRS = (
 )
 
 
-# Files the user drops on the PC to carry the API key across without typing
-# it on the on-screen keyboard. Several names are accepted because there is
-# no reason to make someone rename a file they already wrote.
-KEY_FILE_NAME = "syncdeck-key.txt"
 KEY_FILE_NAMES = (
-    KEY_FILE_NAME,
+    "syncdeck-key.txt",
     "syncdeck-key",
     ".syncdeck-key",
     ".syncthing-key",
@@ -48,8 +44,6 @@ KEY_FILE_NAMES = (
 )
 _KEY_FILE_MAX_BYTES = 8192
 
-# Syncthing generates 32 character keys, but a user-set one can differ. This
-# only has to be tight enough to pick the key out of a small text file.
 _API_KEY_RE = re.compile(r"^[A-Za-z0-9_\-]{16,128}$")
 
 
@@ -302,7 +296,7 @@ class SyncDeckService:
             raise SyncDeckError(
                 "No key file found. Save the key as one of "
                 + ", ".join(KEY_FILE_NAMES)
-                + f" in a folder this Deck syncs, in {home}, {home}/Downloads, or on a USB stick."
+                + f" in a folder this Deck syncs, in {home} or {home}/Downloads."
             )
 
         try:

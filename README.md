@@ -1,7 +1,7 @@
 # SyncDeck
 
 [![CI](https://github.com/infernokun/SyncDeck/actions/workflows/ci.yml/badge.svg)](https://github.com/infernokun/SyncDeck/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v1.4.0-blue)](https://github.com/infernokun/SyncDeck/releases/latest)
+[![Release](https://img.shields.io/badge/release-v1.4.1-blue)](https://github.com/infernokun/SyncDeck/releases/latest)
 [![Decky Loader](https://img.shields.io/badge/Decky%20Loader-plugin-1a9fff)](https://github.com/SteamDeckHomebrew/decky-loader)
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-green)](LICENSE)
 
@@ -110,8 +110,8 @@ A toast on the Deck tells you where the folder landed.
 **Getting the key across without typing it.** A 32 character key on the
 on-screen keyboard is miserable, so you do not have to. On the PC, save the
 key to a file and put it in a folder the Deck already syncs. It arrives on
-the Deck by itself; press *Import key from ...* in the same dialog and it is
-read and the file deleted. A USB stick, your home folder or `~/Downloads`
+the Deck by itself; press _Import key from ..._ in the same dialog and it is
+read and the file deleted. Your home folder or `~/Downloads`
 work too.
 
 The file can be called `syncdeck-key.txt`, `syncdeck-key`, `.syncdeck-key`,
@@ -172,7 +172,7 @@ your save files.
 - **No root.** `plugin.json` has no `_root` flag, so it runs as the `deck`
   user, the same user that owns your Steam files and Syncthing's config.
 - **It never deletes save files.** Removing a game from SyncDeck deletes the
-  *folder entry* in Syncthing, not its contents. Every folder it creates has
+  _folder entry_ in Syncthing, not its contents. Every folder it creates has
   30-day trashcan versioning, so files deleted by a sync are recoverable on
   both ends.
 - **Local Syncthing API key** is read from `config.xml` (owner-readable,
@@ -220,13 +220,13 @@ make zip             # out/SyncDeck.zip
 dir is writable by the `deck` user. It is root-owned by default, so the ZIP
 route is the safe one.
 
-| Path | Contents |
-| --- | --- |
-| `main.py` | Decky entry point |
+| Path                   | Contents                                                                           |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `main.py`              | Decky entry point                                                                  |
 | `py_modules/syncdeck/` | backend: Steam library, Syncthing client, save detection, settings, daemon control |
-| `src/` | Quick Access Menu panel (React) |
-| `scripts/` | CLI for the backend, CEF console tool |
-| `tests/` | offline tests against fixture directories |
+| `src/`                 | Quick Access Menu panel (React)                                                    |
+| `scripts/`             | CLI for the backend, CEF console tool                                              |
+| `tests/`               | offline tests against fixture directories                                          |
 
 ## License
 

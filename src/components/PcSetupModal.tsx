@@ -10,8 +10,6 @@ interface Props {
   onSaved: () => void;
 }
 
-const KEY_FILE = 'syncdeck-key.txt';
-
 /**
  * Connect SyncDeck to the PC's Syncthing API so new folders are created
  * there with the matching Windows path, instead of waiting to be accepted.
@@ -93,8 +91,8 @@ export function PcSetupModal({ current, closeModal, onSaved }: Props) {
       </div>
 
       <div style={{ fontSize: '12px', opacity: 0.8, marginBottom: '6px' }}>
-        Rather than typing the key: save it to a file into a folder this Deck already syncs, your home folder,
-        ~/Downloads, or a USB stick. Named <b>{KEY_FILE}</b>, <b>.syncdeck-key</b> or <b>.syncthing</b>. Importing
+        Rather than typing the key: save it to a file into a folder this Deck already syncs, your home folder or
+        ~/Downloads. Named <b>syncdeck-key.txt</b>, <b>.syncdeck-key</b> or <b>.syncthing</b>. Importing
         reads it and deletes it.
       </div>
       <DialogButton disabled={busy} onClick={() => void importFromFile()} style={{ marginBottom: '12px' }}>
